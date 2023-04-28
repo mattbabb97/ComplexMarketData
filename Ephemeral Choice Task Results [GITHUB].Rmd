@@ -1,0 +1,503 @@
+---
+title: "Results for Ephemeral Choice Task"
+author: "Matt Babb"
+date: "12/12/2021"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r Library Packages}
+
+library(rstudioapi)
+library(openxlsx)
+library(readxl)
+library(dplyr)
+library(broom)
+library(tidyr)
+library(tidyverse)
+library(cowplot)
+library(lme4)
+library(ggplot2)
+library(sjPlot)
+library(paletteer)
+library(GGally)
+library(psych)
+library(car)
+library(emmeans)
+library(aod)
+#update.packages()
+```
+
+```{r Read Dat into R}
+trial.trial.data <- read_excel("C:/Users/matth/OneDrive/Documents/Georgia State/Research Projects/Ephemeral Choice Task/Manuscript/Results/EP_Only_Master.xlsx")
+
+demographics <- read_excel("C:/Users/matth/OneDrive/Documents/Georgia State/Research Projects/Ephemeral Choice Task/Manuscript/Results/EP_Monkey_Demographics.xlsx")
+
+# Merge the demographics with the trial level data
+trial.data <- merge(x = trial.trial.data, y = demographics, by.x = "monkey", by.y = "monkey")
+nrow(trial.data) == nrow(trial.trial.data)
+```
+# Must yield TRUE ^
+
+```{r Clean the Trial Data}
+
+trial.data$monkey <- as.factor(trial.data$monkey)
+
+trial.data$monkey_id <- as.factor(trial.data$monkey_id)
+
+table(trial.data$monkey)
+
+trial.data$date <- as.Date(trial.data$date, format = "%m/%d/%Y", optional = TRUE)
+
+trial.data$session_number <- as.numeric(trial.data$session_number)
+
+# Regular Market = 1, Extended Market = 2
+trial.data$session_type <- as.factor(trial.data$session_type)
+table(factor(trial.data$session_type, labels = c("Simple Market", "Complex Market")), trial.data$response1)
+
+# Regular Market First = 1, Extended Market First = 2
+trial.data$market_first <- as.factor(trial.data$market_first)
+table(factor(trial.data$market_first, labels = c("Simple Market First", "Complex Market First")), trial.data$response1)
+
+trial.data$block <- as.factor(trial.data$block)
+
+# Choosing Permanent = 0, Choosing Ephemeral = 1
+trial.data$response1 <- factor(trial.data$response1)
+
+trial.data$response_side <- as.factor(trial.data$response_side)
+
+trial.data$response_time <- as.numeric(trial.data$response_time)
+
+trial.data$optimal <- as.factor(trial.data$optimal)
+
+trial.data$trial_number_by_session <- as.numeric(trial.data$trial_number_by_session)
+
+trial.data$group <- as.factor(trial.data$group)
+
+str(subset(trial.data, select = c("monkey", "session_type", "market_first", "response1")))
+
+sapply(trial.data, function(x) sum(is.na(x)))
+
+nrow(trial.data)
+
+all.trials.no.cuts <- trial.data
+
+trial.data <- subset(trial.data, trial_number_by_session <= 240)
+
+describe(trial.data)
+# See how many monkeys picked which option
+table(trial.data$response1)
+# See how many monkeys picked which option in each session type
+table(factor(trial.data$session_type, labels = c("Regular Market", "Extended Market")), trial.data$response1)
+
+trial.data
+
+```
+```{r Create Data Frame for both Market Types}
+# Simple Market Only data
+simple.market.data <- subset(trial.data, session_type == 1)
+#simple.market.data <- subset(simple.market.data, trial_number_by_session >= 140)
+
+
+# Extended Market Only data
+extended.market.data <- subset(trial.data, session_type == 2)
+#extended.market.data <- subset(extended.market.data, trial_number_by_session >= 140)
+
+table(simple.market.data$monkey, simple.market.data$response1)
+
+table(extended.market.data$monkey, extended.market.data$response1)
+
+simple.market.pref <- data.frame(monkey = c("Albert", "Applesauce", "Atilla", "Bias", "Gabe", "Gambit", "Gretel", "Griffin", "Ingrid", "Irene", "Liam",  "Lily", "Lychee", "Nala", "Paddy", "Widget", "Wren"),
+                                ephemeral = c(table(simple.market.data$monkey, simple.market.data$response1)[,1]),
+                                permanent = c(table(simple.market.data$monkey, simple.market.data$response1)[,2]),
+                                total = c(240))
+
+#simple.market.pref <- data.frame(monkey = c("Albert", "Applesauce", "Atilla", "Bias", "Gabe", "Gambit", "Gretel", #"Griffin", "Ingrid", "Irene", "Liam",  "Lily", "Lychee", "Nala", "Paddy", "Widget", "Wren"),
+#                                ephemeral = c(table(simple.market.data$monkey, simple.market.data$response1)[,1]),
+#                                permanent = c(table(simple.market.data$monkey, simple.market.data$response1)[,2]),
+#                                total = c(100))
+
+
+simple.market.pref <- simple.market.pref %>%
+  group_by(monkey) %>%
+  do(tidy(binom.test(.$ephemeral, .$total, p = 0.5, alternative = "two.sided", conf.level = 0.95)))
+
+simple.market.pref
+
+simple.market.pref$market_type <- 1
+
+# Save the Data as its own .xlsx
+write.xlsx(simple.market.pref, file = "Simple Market Preferences.xlsx", sheetName = "Sheet", append = FALSE, overwrite =  TRUE)
+
+extended.market.pref <- data.frame(monkey = c("Albert", "Applesauce", "Atilla", "Bias", "Gabe", "Gambit", "Gretel", "Griffin", "Ingrid", "Irene", "Liam",  "Lily", "Lychee", "Nala", "Paddy", "Widget", "Wren"),
+                                ephemeral = c(table(extended.market.data$monkey, extended.market.data$response1)[,1]),
+                                permanent = c(table(extended.market.data$monkey, extended.market.data$response1)[,2]),
+                                total = c(240))
+
+extended.market.pref <- extended.market.pref %>%
+  group_by(monkey) %>%
+  do(tidy(binom.test(.$ephemeral, .$total, p = 0.5, alternative = "two.sided", conf.level = 0.95)))
+
+extended.market.pref
+
+extended.market.pref$market_type <- 2
+
+# Save the Data as its own .xlsx
+write.xlsx(extended.market.pref, file = "Extended Market Preferences.xlsx", sheetName = "Sheet", append = FALSE, overwrite =  TRUE)
+```
+
+
+```{r Create Data Frames for Each Condition First}
+# Simple Market First data
+simple.first.data <- subset(trial.data, market_first == 1)
+
+# Extended Market First data
+extended.first.data <- subset(trial.data, market_first == 2)
+
+table(simple.first.data$monkey, simple.first.data$response1)
+
+table(extended.first.data$monkey, extended.first.data$response1)
+
+simple.first.pref <- data.frame(monkey = c("Albert", "Applesauce", "Atilla", "Bias", "Gabe", "Gambit", "Gretel", "Griffin", "Ingrid", "Irene", "Liam",  "Lily", "Lychee", "Nala", "Paddy", "Widget", "Wren"),
+                                ephemeral = c(table(simple.first.data$monkey, simple.first.data$response1)[,1]),
+                                permanent = c(table(simple.first.data$monkey, simple.first.data$response1)[,2]),
+                                total = c(480))
+
+simple.first.pref <- simple.first.pref %>%
+  group_by(monkey) %>%
+  do(tidy(binom.test(.$ephemeral, .$total, p = 0.5, alternative = "two.sided", conf.level = 0.95)))
+
+simple.first.pref$market_first <- 1
+
+simple.first.pref <- subset(simple.first.pref, monkey == "Albert" | monkey == "Applesauce" |
+                              monkey == "Gabe" | monkey == "Ingrid" | 
+                              monkey == "Lily" | monkey == "Lychee" | 
+                              monkey == "Paddy" | monkey == "Widget")
+
+simple.first.pref
+
+extended.first.pref <- data.frame(monkey = c("Albert", "Applesauce", "Atilla", "Bias", "Gabe", "Gambit", "Gretel", "Griffin", "Ingrid", "Irene", "Liam",  "Lily", "Lychee", "Nala", "Paddy", "Widget", "Wren"),
+                                ephemeral = c(table(extended.first.data$monkey, extended.first.data$response1)[,1]),
+                                permanent = c(table(extended.first.data$monkey, extended.first.data$response1)[,2]),
+                                total = c(480))
+
+extended.first.pref <- extended.first.pref %>%
+  group_by(monkey) %>%
+  do(tidy(binom.test(.$ephemeral, .$total, p = 0.5, alternative = "two.sided", conf.level = 0.95)))
+
+extended.first.pref$market_first <- 2
+
+extended.first.pref <- subset(extended.first.pref, monkey == "Atilla" | monkey == "Bias" |
+                              monkey == "Gambit" | monkey == "Gretel" | 
+                              monkey == "Griffin" | monkey == "Irene" | 
+                              monkey == "Liam" | monkey == "Nala" | monkey == "Wren")
+
+extended.first.pref
+
+```
+
+```{r Test Ephemeral Preference b/w Conditions}
+
+market.preference <- merge(simple.market.pref, extended.market.pref, by.x = "monkey", by.y = "monkey")
+
+colnames(market.preference)[2] ="simple_market_preference"
+colnames(market.preference)[11] ="extended_market_preference"
+
+
+# Compare each Market Type to Chance 0.50
+t.test(market.preference$simple_market_preference, mu = 0.5, conf.level= 0.95)
+t.test(market.preference$extended_market_preference, mu = 0.5, conf.level= 0.95)
+
+# Compare the two Market Types to eachother
+t.test(market.preference$simple_market_preference, market.preference$extended_market_preference, paired = TRUE)
+wilcox.test(market.preference$simple_market_preference, market.preference$extended_market_preference, paired = TRUE, conf.int=TRUE, exact = FALSE)
+
+```
+
+
+```{r Test Ephemeral Preference b/w Condition Order}
+market.first.preference <- rbind(simple.first.pref, extended.first.pref)
+
+# Compare each Market First Group to Chance 0.50
+t.test(simple.first.pref$estimate, mu = 0.5, conf.level= 0.95)
+t.test(extended.first.pref$estimate, mu = 0.5, conf.level= 0.95)
+
+# Compare the two Market First Groups to eachother
+t.test(simple.first.pref$estimate, extended.first.pref$estimate, paired = FALSE, conf.int = TRUE)
+wilcox.test(estimate ~ market_first, data = market.first.preference, na.rm=TRUE, paired=FALSE, exact=FALSE, conf.int=TRUE)
+```
+
+```{r Check for Side Bias}
+
+table(simple.market.data$monkey, simple.market.data$response_side)
+
+table(extended.market.data$monkey, extended.market.data$response_side)
+
+simple.side.bias <- data.frame(monkey = c("Albert", "Applesauce", "Atilla", "Bias", "Gabe", "Gambit", "Gretel", "Griffin", "Ingrid", "Irene", "Liam",  "Lily", "Lychee", "Nala", "Paddy", "Widget", "Wren"),
+                                left = c(table(simple.market.data$monkey, simple.market.data$response_side)[,1]),
+                                right = c(table(simple.market.data$monkey, simple.market.data$response_side)[,2]),
+                                total = c(240))
+
+extended.side.bias <- data.frame(monkey = c("Albert", "Applesauce", "Atilla", "Bias", "Gabe", "Gambit", "Gretel", "Griffin", "Ingrid", "Irene", "Liam",  "Lily", "Lychee", "Nala", "Paddy", "Widget", "Wren"),
+                                left = c(table(extended.market.data$monkey, extended.market.data$response_side)[,1]),
+                                right = c(table(extended.market.data$monkey, extended.market.data$response_side)[,2]),
+                                total = c(240))
+
+```
+
+
+```{r Visualize the Market Preferences}
+
+# Bind the Regular and Extended Market Preferences
+market.preference.visual <- rbind(simple.market.pref, extended.market.pref)
+
+market.preference.visual$market_first <- c(1, 1, 2, 2, 1, 2, 2, 2, 1, 2, 2, 1, 1, 2, 1, 1, 2, 
+                                    1, 1, 2, 2, 1, 2, 2, 2, 1, 2, 2, 1, 1, 2, 1, 1, 2)
+
+market.preference.visual
+
+market.preference.visual$market_type <- factor(market.preference.visual$market_type)
+market.preference.visual$market_first <- factor(market.preference.visual$market_first)
+
+
+preference_graph <- ggplot(market.preference.visual, aes(x = factor(market_type), 
+                            y = estimate)) +
+                    geom_pointrange(mapping = aes(x = factor(market_type), 
+                                                  y = estimate, 
+                                                  ymin = conf.low, 
+                                                  ymax = conf.high),
+                                    position = position_jitter(width = 0.2)) +
+                    geom_hline(yintercept = 0.5, size = 0.1, linetype = "longdash") +
+                    facet_wrap(~  factor(market_first, labels = c("Simple Market First", "Complex Market First"))) +
+                    labs(x = "Market Type", y = "Proportion of Trials") +
+                    #ylim(0, 1)+
+                    theme(legend.position = "none", # Remove Legend
+                          axis.text=element_text(size=300), # Change Font Size
+                          panel.grid.major.x = element_blank()) + # X Grid Lines
+                    scale_y_continuous(breaks=seq(0,1.2,0.2)) +
+                    scale_x_discrete(labels = c("Simple Market", "Complex Market")) +
+                    theme_classic()
+
+preference_graph + theme(axis.text = element_text(size = 20), 
+                         axis.title = element_text(size = 28),
+                         strip.text = element_text(size = 28))
+
+#ggsave("Preference_Graph_Final.png", height = 8, width = 12, units = "in")
+
+
+Market_Graph <- ggplot(market.preference.visual, aes(x = factor(market_type), y = estimate, fill = market_type)) +
+                  geom_boxplot() +
+                  geom_jitter(size = 2.5, width = 0.2) +
+                  #stat_boxplot(aes(market_type, estimate), geom = 'errorbar', linetype = 2, width = 0.5) +
+                  facet_wrap(~  factor(market_first, 
+                                       labels = c("(a) Simple Market First", "(b) Complex Market First"))) +
+                  stat_summary(fun=mean, geom="point", shape=8, size=5) +
+                  labs(title = "", x = "Market Type", y = "Proportion of Trials") +
+                  theme(legend.position = "none", text = element_text(size=20), panel.spacing = unit(4, "lines")) +
+                  scale_x_discrete(labels = c("Simple Market", "Complex Market")) +
+                  scale_y_continuous(breaks=seq(0,1.2,0.2), limits = c(0.00, 1.00)) +
+                  scale_fill_manual(values=c("red", "blue")) +
+                  guides(fill = "none") +
+                  geom_hline(yintercept = 0.5, size = 0.8, linetype = "longdash") +
+                  theme_classic()
+
+Market_Graph + theme(axis.text = element_text(size = 20), 
+                         axis.title = element_text(size = 28),
+                         strip.text = element_text(size = 28))
+
+#ggsave("Preference_Graph_Box_Final.png", height = 8, width = 12, units = "in")
+```
+
+```{r Visualize Preferences over Time}
+by_chunk_raw <- read_excel("C:/Users/matth/OneDrive/Documents/Georgia State/Research Projects/Ephemeral Choice Task/Manuscript/Results/EP_Only_Chunked_Data.xlsx")
+
+by_chunk <- by_chunk_raw %>% 
+  group_by(monkey, session_type, chunk) %>% 
+  mutate(sum = sum(optimal, na.rm = FALSE)) %>%
+  mutate(ncol = length(monkey)) %>%
+  mutate(ephemeral_preference = sum/ncol)
+
+graph_by_chunk <- subset(by_chunk, trial_number_by_session == 1 | trial_number_by_session == 41 | trial_number_by_session == 81 | trial_number_by_session == 121 | trial_number_by_session == 161 | trial_number_by_session == 201)
+
+graph_by_chunk <- subset(graph_by_chunk, select = c("monkey", "market_first", "session_type", "chunk", "ephemeral_preference"))
+
+chunk_graph <- ggplot(graph_by_chunk, aes(chunk, ephemeral_preference, fill = session_type, color = session_type)) +
+  geom_point() +
+  geom_smooth(method = lm, se = TRUE) +
+  facet_wrap(~  factor(market_first, labels = c("(a) Simple Market First", "(b) Complex Market First"))) +
+  labs(x = "Trial Number", y = "Ephemeral Preference", fill = "Market Type", color = "Market Type") +
+  #scale_fill_discrete(name = "Market Type", labels = c("Simple", "Extended")) +
+  scale_fill_manual(values=c("red", "blue"), name = "Market Type", labels = c("Simple", "Complex")) +
+  scale_color_manual(values=c("red", "navy"), name = "Market Type", labels = c("Simple", "Complex")) +
+  scale_x_continuous("Trial Number", breaks = c(1, 2, 3, 4, 5 ,6), labels = c("1 - 40", "41 - 80", "81 - 120", "121 - 160", "161 - 200", "201 - 240")) +
+  theme_classic()
+
+
+chunk_graph + theme(legend.title =element_text("Market Type", size = 15),
+                    legend.text = element_text(size = 15),
+                    axis.text.x = element_text(angle = 20, vjust = 0.5, hjust=0.5), 
+                    panel.spacing = unit(4, "lines"),
+                    axis.text = element_text(size = 15), 
+                    axis.title = element_text(size = 28),
+                    strip.text = element_text(size = 28),
+                    panel.grid.major.y = element_line( size=.1, color="black"))
+
+ggsave("Preference_Over_Time_Graph_Final.png", height = 8, width = 15, units = "in")
+```
+
+
+
+```{r Data Visualization}
+
+# Graph the Effect of Rank on Ephemeral Preference
+market.preference.visual <- merge(x = market.preference.visual, y = demographics, by.x = "monkey", by.y = "monkey")
+
+market.preference.visual
+
+market.preference.visual$market_type <- factor(market.preference.visual$market_type, labels = c("Simple Market", "Complex Market"))
+
+Rank_Graph <- ggplot(market.preference.visual, aes(rank, estimate, fill = market_type, color = market_type)) +
+  geom_point() +
+  geom_smooth(method = lm, se = TRUE) +
+  labs(x = "Rank Score", y = "Ephemeral Preference") +
+  scale_fill_manual(values=c("red", "blue"), name = "Market Type", labels = c("Simple", "Complex")) +
+  scale_color_manual(values=c("red", "navy"), name = "Market Type", labels = c("Simple", "Complex")) +
+  theme(legend.position = "none") +
+  theme_classic()
+
+Rank_Graph + theme(legend.title =element_text("Market Type", size = 20),
+                    legend.text = element_text(size = 20),
+                    axis.text.x = element_text(angle = 0, vjust = 0.5, hjust=0.5), 
+                    axis.text = element_text(size = 15), 
+                    axis.title = element_text(size = 28),
+                    strip.text = element_text(size = 28),
+                    panel.grid.major.y = element_line( size=.1, color="black"))
+ggsave("Rank_Graph_Final.png", height = 8, width = 12, units = "in")
+
+```
+
+
+```{r Null Model and Random Effects Only Model}
+
+null_model <- glm(optimal ~ 1, data = trial.data, family = binomial(link="logit"))
+
+summary(null_model)
+
+random_effects_only <- glmer(optimal ~ (1|monkey), 
+                                    family = binomial(link='logit'), 
+                                    data = trial.data,
+                                    control = glmerControl(optimizer = "bobyqa", optCtrl=list(maxfun = 10000)))
+
+# bobyqa = optimizer To avoid a warning of nonconvergence
+
+summary(random_effects_only)
+```
+
+ 
+```{r Mixed Effects Logistic Regression}
+
+# Z center numeric variables
+trial.data$z.trial_number_by_session = as.vector(scale(trial.data$trial_number_by_session))
+trial.data$z.rank = as.vector(scale(trial.data$rank))
+
+all.trials.no.cuts$z.trial_number_by_session = as.vector(scale(all.trials.no.cuts$trial_number_by_session))
+all.trials.no.cuts$z.rank = as.vector(scale(all.trials.no.cuts$rank))
+
+
+# Run my model
+Model_1 <- glmer(optimal ~  session_type*market_first +
+                              session_type*z.trial_number_by_session +
+                              z.trial_number_by_session*market_first +
+                              session_type*z.rank +
+                              (1|monkey), 
+                              family = binomial(link='logit'), 
+                              data = trial.data,
+                              control = glmerControl(optimizer = "bobyqa", optCtrl=list(maxfun = 10000)))
+
+
+# Compare to my random_effects_only model using a Chi Sq distribution
+anova(random_effects_only, Model_1, test = "chisq")
+
+
+summary(Model_1)
+
+```
+     AIC      BIC   logLik deviance df.resid 
+  8287.1   8343.2  -4135.5   8271.1     8152 
+```{r Type II Wald's Test for Predictors}
+
+Anova(Model_1)
+
+```
+
+```{r Probe the Interaction of Model_1}
+# Because we have a significant interaction of session_type and trial_number, we need to probe that interaction
+
+# You are interested in the effect of session_type at different trial numbers
+# Therefore you need to probe the simple effect of session_type at Early trial numbers and Late trial numbers
+
+# Since you are interested if the SLOPES are different, use emtrends() 
+emtrends(Model_1, pairwise ~ session_type, var = "z.trial_number_by_session")
+emtrends(Model_1, pairwise ~ session_type, var = "z.rank")
+
+# If you wanted to know if the MEANS are different, use emmeans()
+#emmeans(Model_2_Centered, pairwise ~ session_type | trial_number_by_session_center)
+```
+
+```{r Ouput the Table for the Manuscript}
+# Output the Odds Ratio, SE, and p-values to a nice table
+tab_model(Model_1,
+          show.est = TRUE, show.ci = 0.95,
+          show.p = TRUE, p.style = "numeric",
+          show.se = TRUE, show.r2 = TRUE,
+          show.zeroinf = FALSE,
+          show.re.var = FALSE, show.icc = FALSE,
+          title = "Logistic Regression Predicting the Likelihood of Selecting the Ephemeral Option")
+```
+
+```{r Check for Multicolinearity}
+# VIF > 5 indicate a problem with multicolinearity
+
+simple_model <- lm(as.numeric(optimal) ~ session_type + market_first + trial_number_by_session + rank, data = trial.data)
+
+summary(simple_model)
+
+vif(simple_model)
+```
+
+```{r How well does your model classify the data?}
+# Next set up a confusion matrix, which is a technique used in machine learning to test how well your model predicts your data. 
+
+# Run the test data through the model
+res <- predict(Model_1, trial.data, type = "response")
+
+# Set up a confusion matrix to validate the model
+conf_matrix <- table(Actual_Value = trial.data$optimal, Predicted_Value = res > 0.5)
+conf_matrix
+
+# What percent of cases in your data were predicted accurately (as a case or non-case) given your model:
+(conf_matrix[[1,1]] + conf_matrix[[2,2]]) / sum(conf_matrix)
+
+# 74.6% Correct Prediction of Cases
+```
+
+
+
+
+```{r Check Diagnostics of Model}
+resid <- residuals(Model_1)
+qqnorm(resid)
+
+r_int_model_1 <- ranef(Model_1)$monkey$'(Intercept)'
+qqnorm(r_int_model_1)
+shapiro.test(r_int_model_1)
+
+
+```
+
+
+
